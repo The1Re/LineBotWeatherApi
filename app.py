@@ -1,5 +1,4 @@
 from flask import Flask, jsonify, request, abort
-from werkzeug.middleware.proxy_fix import ProxyFix
 import requests
 from dotenv import load_dotenv
 import os
@@ -7,16 +6,13 @@ import argparse
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, LocationMessageContent
+from linebot.v3.webhooks import MessageEvent, LocationMessageContent
 from core import getWeather
-
 
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
 CHANNEL_SECRET = os.getenv('CHANNEL_SECRET')
 CHANNEL_TOKEN = os.getenv('CHANNEL_TOKEN')
-
-
 
 app = Flask(__name__)
 handle = WebhookHandler(CHANNEL_SECRET)
@@ -30,19 +26,22 @@ args = parser.parse_args()
 def index():
     lat = request.args.get('lat', default=12.646, type=float)
     lon = request.args.get('lon', default=101.171, type=float)
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}"
+    url = f"https://api.tomorrow.io/v4/weather/realtime?location={lat},{lon}&apikey={API_KEY}"
     response = requests.get(url).json()
+    values = response['data']['values']
 
-    temp = response['main']['temp'] - 273
-    pressure = response['main']['pressure']
-    humidity = response['main']['humidity']
-    wind_speed = response['wind']['speed']
+    temp = values['temperature']
+    humidity = values['humidity']
+    windSpeed = values['windSpeed']
+    dewPoint = values['dewPoint']
+    rainIntensity = values['rainIntensity']
     
     data = {
         'temp' : temp,
-        'pressure' : pressure,
         'humidity' : humidity,
-        'wind_speed' : wind_speed
+        'windSpeed' : windSpeed,
+        'dewPoint' : dewPoint,
+        'rainIntensity' : rainIntensity
     }
 
     return jsonify(data)
@@ -58,7 +57,6 @@ def callback():
     except InvalidSignatureError :
         app.logger.info('Invalid signature. Please check your Channel Access Token/Channel Secret.')
         abort(400)
-
     
     return 'OK'
 
@@ -67,11 +65,12 @@ def handle_location_message(event: MessageEvent):
     lat, lon = event.message.latitude, event.message.longitude
     data = getWeather(lat, lon, API_KEY)
     show = (
-        "Temp : {:n}\n"
-        "Pressure : {}\n"
-        "Humidity : {}\n"
-        "Wind speed : {}"
-    ).format(data['temp'], data['pressure'], data['humidity'], data['wind_speed'])
+        "Temperature : {:n} °C\n"
+        "Humidity : {} %\n"
+        "Wind speed : {} m/s\n"
+        "DewPoint : {} °C\n"
+        "RainIntensity : {} mm/hr"
+    ).format(data['temp'], data['humidity'], data['windSpeed'], data['dewPoint'], data['rainIntensity'])
 
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
@@ -79,6 +78,7 @@ def handle_location_message(event: MessageEvent):
             ReplyMessageRequest(
                 replyToken=event.reply_token,
                 messages=[
+                    TextMessage(text=f"Address = {event.message.address}"),
                     TextMessage(text=f"lat = {lat:.3f}, lon = {lon:.3f}"),
                     TextMessage(text=show)
                 ]
