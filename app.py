@@ -22,30 +22,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-d','--debug',help='Debug mode for Developer', action='store_true')
 args = parser.parse_args()
 
-@app.route('/', methods=['GET'])
-def index():
-    lat = request.args.get('lat', default=12.646, type=float)
-    lon = request.args.get('lon', default=101.171, type=float)
-    url = f"https://api.tomorrow.io/v4/weather/realtime?location={lat},{lon}&apikey={API_KEY}"
-    response = requests.get(url).json()
-    values = response['data']['values']
-
-    temp = values['temperature']
-    humidity = values['humidity']
-    windSpeed = values['windSpeed']
-    dewPoint = values['dewPoint']
-    rainIntensity = values['rainIntensity']
-    
-    data = {
-        'temp' : temp,
-        'humidity' : humidity,
-        'windSpeed' : windSpeed,
-        'dewPoint' : dewPoint,
-        'rainIntensity' : rainIntensity
-    }
-
-    return jsonify(data)
-
 @app.route('/callback', methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
